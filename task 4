@@ -1,0 +1,79 @@
+import os 
+import zipfile 
+import numpy as np 
+import tensorflow as tf 
+from tensorflow.keras.preprocessing.image import ImageDataGenerator 
+from tensorflow.keras.models import Sequential 
+from tensorflow.keras.layers import Conv2D, MaxPooling2D, Flatten, Dense, Dropout 
+from sklearn.metrics import classification_report, confusion_matrix 
+# Define paths and parameters 
+ZIP_FILE_PATH = "cat and dog zip file.zip" 
+EXTRACTION_PATH = "./cat_dog_dataset" 
+IMG_SIZE = (224, 224) 
+BATCH_SIZE = 32 
+# Ensure the zip file path is correctly quoted and extract if necessary 
+if not os.path.exists(EXTRACTION_PATH): 
+    with zipfile.ZipFile(ZIP_FILE_PATH, 'r') as zip_ref: 
+        zip_ref.extractall(EXTRACTION_PATH)
+# Create subdirectories for classes if they don't exist 
+ 
+for class_name in ['cat', 'dog']: 
+    class_dir = os.path.join(EXTRACTION_PATH, class_name) 
+    if not os.path.exists(class_dir): 
+        os.makedirs(class_dir) 
+# Move images into their respective class subdirectories 
+for filename in os.listdir(EXTRACTION_PATH): 
+    if filename.lower().endswith(('.jpg', '.jpeg', '.png')): 
+        source_path = os.path.join(EXTRACTION_PATH, filename) 
+        if filename.lower().startswith("cat"): 
+            destination_path = os.path.join(EXTRACTION_PATH, 'cat', filename) 
+        elif filename.lower().startswith("dog"): 
+            destination_path = os.path.join(EXTRACTION_PATH, 'dog', filename) 
+        else: 
+            continue  # Skip files that don't start with "cat" or "dog" 
+        os.rename(source_path, destination_path) 
+ 
+# Initialize ImageDataGenerator for data preprocessing 
+train_datagen = ImageDataGenerator(rescale=1./255, validation_split=0.3) 
+test_datagen = ImageDataGenerator(rescale=1./255) 
+# Use flow_from_directory to load and split data into train and validation sets 
+train_generator = train_datagen.flow_from_directory( 
+    EXTRACTION_PATH, 
+    target_size=IMG_SIZE, 
+    batch_size=BATCH_SIZE, 
+    class_mode='binary', 
+    subset='training' 
+) 
+validation_generator = train_datagen.flow_from_directory( 
+    EXTRACTION_PATH, 
+    target_size=IMG_SIZE, 
+    batch_size=BATCH_SIZE, 
+    class_mode='binary', 
+    subset='validation' 
+)# Define a simple CNN model 
+model = Sequential([ 
+    Conv2D(32, (3, 3), activation='relu', input_shape=(224, 224, 3)), 
+    MaxPooling2D(pool_size=(2, 2)), 
+    Conv2D(64, (3, 3), activation='relu'), 
+MaxPooling2D(pool_size=(2, 2)), 
+Flatten(), 
+Dense(128, activation='relu'), 
+Dropout(0.5), 
+Dense(1, activation='sigmoid')  # Use 'sigmoid' for binary classification 
+])# Compile the model 
+model.compile(optimizer='adam', loss='binary_crossentropy', metrics=['accuracy']) 
+# Train the model with validation data 
+history = model.fit(train_generator,epochs=10,validation_data=validation_generator) 
+# Evaluate the model on the validation data 
+loss, accuracy = model.evaluate(validation_generator) 
+print(f"Validation Loss: {loss}, Validation Accuracy: {accuracy}") 
+# Generate classification metrics on the validation set 
+Y_pred = model.predict(validation_generator) 
+Y_pred_classes = (Y_pred > 0.5).astype(int).reshape(-1) 
+# For evaluation on confusion matrix and classification report 
+y_true = validation_generator.classes 
+print("Classification Report:") 
+print(classification_report(y_true, Y_pred_classes)) 
+print("Confusion Matrix:") 
+print(confusion_matrix(y_true, Y_pred_classes)) 
+print("Dataset successfully preprocessed, trained, and evaluated.")
